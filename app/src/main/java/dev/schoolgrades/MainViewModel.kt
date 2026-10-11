@@ -120,13 +120,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         try {
             val student = api.student(cookie)
             val year = api.currentSchoolYear(cookie)
-            try {
-                api.updateRapportInstellinggroepFlags(cookie, "18")
-            } catch (e: SessionExpiredException) {
-                throw e
-            } catch (e: java.io.IOException) {
-                // Keep grade loading available when the server rejects the flag update.
-            }
             val records = api.grades(cookie, student.id, year.from)
             var todoError: String? = null
             val todoItems = try {

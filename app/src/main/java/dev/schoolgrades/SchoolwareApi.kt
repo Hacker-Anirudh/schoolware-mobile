@@ -22,6 +22,12 @@ class SessionExpiredException : IOException("Your session has expired. Please si
 /** Client for the parts of Schoolware's REST layer the student grade screen uses. */
 class SchoolwareApi {
     private val client = OkHttpClient.Builder()
+        .addInterceptor { chain ->
+            val request = chain.request().newBuilder()
+                .header("User-Agent", "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Safari/537.36")
+                .build()
+            chain.proceed(request)
+        }
         .connectTimeout(15, TimeUnit.SECONDS)
         .readTimeout(30, TimeUnit.SECONDS)
         .build()
@@ -219,26 +225,6 @@ class SchoolwareApi {
             }
         } catch (e: Exception) {
             emptyList()
-        }
-    }
-
-    /**
-     * Updates RapportInstellinggroep Flags to 394 using a PUT request.
-     */
-    suspend fun updateRapportInstellinggroepFlags(cookie: String, groupId: String, flags: Int = 394) = withContext(Dispatchers.IO) {
-        val url = "${Config.API}/REST/RapportInstellinggroep/$groupId".toHttpUrl()
-        val payload = """{"Flags":$flags}"""
-        val request = Request.Builder()
-            .url(url)
-            .header("Cookie", cookie)
-            .header("Content-Type", "application/json;charset=UTF-8")
-            .header("Accept", "application/json")
-            .put(payload.toRequestBody("application/json; charset=utf-8".toMediaType()))
-            .build()
-
-        client.newCall(request).execute().use { resp ->
-            if (resp.code == 401 || resp.code == 403) throw SessionExpiredException()
-            if (!resp.isSuccessful) throw IOException("Server returned ${resp.code}")
         }
     }
 
