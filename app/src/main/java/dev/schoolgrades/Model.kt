@@ -35,6 +35,11 @@ data class LoopbaanRow(
 )
 
 @Serializable
+data class SchoolAgenda(
+    @SerialName("ID") val id: Long = 0,
+)
+
+@Serializable
 data class LoopbaanData(
     val rows: List<LoopbaanRow> = emptyList(),
 )
@@ -95,6 +100,17 @@ data class ReportPdfData(
     val rows: List<ReportPdfRow> = emptyList(),
 )
 
+@Serializable
+data class AgendaPoint(
+    @SerialName("ID") val id: Long = 0,
+    @SerialName("Titel") val title: String = "",
+    @SerialName("Van") val startsAt: String = "",
+    @SerialName("Tot") val endsAt: String = "",
+    @SerialName("TypePunt") val type: Int = 0,
+    @SerialName("VakNaam") val subject: String = "",
+    @SerialName("Commentaar") val comment: String = "",
+)
+
 data class SubjectMeta(
     val teacher: String = "",
     val weight: Double = 1.0,
@@ -113,6 +129,7 @@ data class Assessment(
     @SerialName("BeoordelingMomentType_") val type: String = "",
     @SerialName("BeoordelingMomentDatum") val date: String = "",
     @SerialName("BeoordelingMomentNoemer") val max: Double = 0.0,
+    @SerialName("BeoordelingMomentMediaan") val median: Double? = null,
     @SerialName("BeoordelingMomentGewicht") val weight: Double? = null,
     @SerialName("BeoordelingMomentCategorieID") val categoryId: Long = 0,
     @SerialName("BeoordelingMomentCategorieOmschrijving") val categoryName: String = "",
@@ -144,6 +161,7 @@ data class Test(
     val isTask: Boolean,
     val date: String,
     val max: Double,
+    val median: Double?,
     val weight: Double?,
     val categoryId: Long,
     val categoryName: String,
@@ -190,31 +208,12 @@ data class Subject(
     val pending: Int get() = tests.count { it.score == null && !it.absent }
 
     val weightedAverage: Double?
-        get() {
-            val gradedTests = tests.filter { it.score != null && it.max > 0 && !it.absent }
-            if (gradedTests.isEmpty()) return null
-
-            val categories = gradedTests.groupBy { it.categoryId }
-            val categoryAverages = mutableListOf<Pair<Double, Double>>() // (categoryAverageRatio, categoryWeight)
-
-            for ((_, cTests) in categories) {
-                val catWeight = cTests.firstOrNull()?.categoryWeight ?: 100.0
-                val totalEarnedScore = cTests.sumOf { it.score!! * it.effectiveWeight }
-                val totalMaxScore = cTests.sumOf { it.max * it.effectiveWeight }
-                if (totalMaxScore > 0) {
-                    val catAvg = totalEarnedScore / totalMaxScore
-                    categoryAverages.add(Pair(catAvg, if (catWeight > 0) catWeight else 100.0))
-                }
-            }
-
-            if (categoryAverages.isEmpty()) return null
-
-            val totalScoreSum = categoryAverages.sumOf { (avg, cw) -> avg * cw }
-            val totalWeightSum = categoryAverages.sumOf { (_, cw) -> cw }
-
-            if (totalWeightSum <= 0) return null
-            return totalScoreSum / totalWeightSum
+        get() = calculateAssessmentAverage(tests, excludeAbsent = true) { test ->
+            if (test.max > 0) test.score?.div(test.max) else null
         }
+
+    val medianAverage: Double?
+        get() = calculateAssessmentAverage(tests, excludeAbsent = false) { it.median }
 
     val weightedAverageLabel: String?
         get() {
@@ -230,16 +229,58 @@ data class Subject(
             val percentage = avgRatio * 100
             return "${formatNumber(percentage)}%"
         }
+
+    val medianAveragePercentageLabel: String?
+        get() {
+            val avgRatio = medianAverage ?: return null
+            return "${formatNumber(avgRatio * 100)}%"
+        }
+}
+
+private fun calculateAssessmentAverage(
+    tests: List<Test>,
+    excludeAbsent: Boolean,
+    ratioFor: (Test) -> Double?,
+): Double? {
+    val weightedTests = tests.mapNotNull { test ->
+        ratioFor(test)?.let { ratio -> test to ratio }
+    }.filter { (test, _) -> test.max > 0 && (!excludeAbsent || !test.absent) }
+    if (weightedTests.isEmpty()) return null
+
+    val categoryAverages = weightedTests.groupBy { it.first.categoryId }.mapNotNull { (_, categoryTests) ->
+        val categoryWeight = categoryTests.firstOrNull()?.first?.categoryWeight ?: 100.0
+        val totalWeightedScore = categoryTests.sumOf { (test, ratio) -> ratio * test.max * test.effectiveWeight }
+        val totalWeightedMaximum = categoryTests.sumOf { (test, _) -> test.max * test.effectiveWeight }
+        if (totalWeightedMaximum > 0) {
+            (totalWeightedScore / totalWeightedMaximum) to if (categoryWeight > 0) categoryWeight else 100.0
+        } else {
+            null
+        }
+    }
+    if (categoryAverages.isEmpty()) return null
+
+    val totalWeightedScore = categoryAverages.sumOf { (average, weight) -> average * weight }
+    val totalWeight = categoryAverages.sumOf { (_, weight) -> weight }
+    return if (totalWeight > 0) totalWeightedScore / totalWeight else null
 }
 
 /** Calculates the overall average ratio weighted by each subject's dynamic curriculum weight */
 fun calculateOverallAverage(subjects: List<Subject>): Double? {
-    val gradedSubjects = subjects.filter { it.weightedAverage != null }
-    if (gradedSubjects.isEmpty()) return null
-    val totalWeightedScore = gradedSubjects.sumOf { it.weightedAverage!! * it.subjectWeight }
-    val totalSubjectWeight = gradedSubjects.sumOf { it.subjectWeight }
-    if (totalSubjectWeight <= 0) return null
-    return totalWeightedScore / totalSubjectWeight
+    return calculateOverallWeightedRatio(subjects) { it.weightedAverage }
+}
+
+fun calculateOverallMedian(subjects: List<Subject>): Double? {
+    return calculateOverallWeightedRatio(subjects) { it.medianAverage }
+}
+
+private fun calculateOverallWeightedRatio(subjects: List<Subject>, ratioFor: (Subject) -> Double?): Double? {
+    val weightedSubjects = subjects.mapNotNull { subject ->
+        ratioFor(subject)?.let { ratio -> subject to ratio }
+    }
+    if (weightedSubjects.isEmpty()) return null
+    val totalWeightedScore = weightedSubjects.sumOf { (subject, ratio) -> ratio * subject.subjectWeight }
+    val totalSubjectWeight = weightedSubjects.sumOf { (subject, _) -> subject.subjectWeight }
+    return if (totalSubjectWeight > 0) totalWeightedScore / totalSubjectWeight else null
 }
 
 fun formatNumber(v: Double): String {
@@ -279,6 +320,7 @@ private fun Assessment.toTest(): Test {
         isTask = type == "bmtTaak",
         date = date,
         max = max,
+        median = median,
         weight = weight,
         categoryId = categoryId,
         categoryName = categoryName,

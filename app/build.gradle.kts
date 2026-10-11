@@ -31,11 +31,11 @@ android {
 }
 
 dependencies {
-    // The Expressive APIs are only public in the Material 3 1.5.0 alphas (stable 1.4.0 keeps them
-    // internal), so this version is pinned explicitly and overrides the BOM's material3 entry.
-    // If Android Studio offers a newer 1.5.0-alpha, take it.
+    implementation("com.squareup.retrofit2:retrofit:2.11.0")
+    implementation("com.squareup.retrofit2:converter-gson:2.11.0")
     implementation(platform("androidx.compose:compose-bom:2025.09.00"))
     implementation("androidx.compose.material3:material3:1.5.0-alpha27")
+    implementation("androidx.compose.material:material-icons-extended")
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.foundation:foundation")
 

@@ -19,7 +19,7 @@ import java.util.concurrent.TimeUnit
 
 class SessionExpiredException : IOException("Your session has expired. Please sign in again.")
 
-/** Read-only client for the parts of Schoolware's REST layer the student grade screen uses. */
+/** Client for the parts of Schoolware's REST layer the student grade screen uses. */
 class SchoolwareApi {
     private val client = OkHttpClient.Builder()
         .connectTimeout(15, TimeUnit.SECONDS)
@@ -60,9 +60,57 @@ class SchoolwareApi {
                 "Leerling" to studentId.toString(),
                 "BeoordelingMomentVan" to yearStart,
                 "BeoordelingMomentTot" to stamp(),
+                "Mediaan" to "true",
             ),
             GradeRecord.serializer(),
         )
+
+    suspend fun upcomingAgendaPoints(cookie: String, schoolYearEnd: String): List<AgendaPoint> = withContext(Dispatchers.IO) {
+        val agendaIds = get(
+            cookie,
+            "Agenda/",
+            mapOf(
+                "MijnAgendas" to "true",
+                "MijnZichtbaar" to "true",
+            ),
+            SchoolAgenda.serializer(),
+        ).map { it.id }
+            .filter { it > 0 }
+            .distinct()
+        if (agendaIds.isEmpty()) return@withContext emptyList()
+
+        val today = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date()) + "T00:00:00"
+        val maxVan = schoolYearEnd.replace(' ', 'T')
+        val pageSize = 40
+        val points = mutableListOf<AgendaPoint>()
+        var offset = 0
+        var page = 1
+
+        while (true) {
+            val nextPage = get(
+                cookie,
+                "AgendaPunt/",
+                mapOf(
+                    "Agenda" to agendaIds.joinToString(","),
+                    "offset" to offset.toString(),
+                    "limit" to pageSize.toString(),
+                    "MaxVan" to maxVan,
+                    "MinVan" to today,
+                    "IsTaakOfToets" to "true",
+                    "VervaltOfWees" to "false",
+                    "page" to page.toString(),
+                    "start" to offset.toString(),
+                ),
+                AgendaPoint.serializer(),
+            )
+            points += nextPage
+            if (nextPage.size < pageSize) break
+            offset += nextPage.size
+            page += 1
+        }
+
+        points.distinctBy { it.id }.sortedBy { it.startsAt }
+    }
 
     suspend fun subjectMetadata(cookie: String, studentId: Long): Map<String, SubjectMeta> = withContext(Dispatchers.IO) {
         val map = mutableMapOf<String, SubjectMeta>()
@@ -171,6 +219,26 @@ class SchoolwareApi {
             }
         } catch (e: Exception) {
             emptyList()
+        }
+    }
+
+    /**
+     * Updates RapportInstellinggroep Flags to 394 using a PUT request.
+     */
+    suspend fun updateRapportInstellinggroepFlags(cookie: String, groupId: String, flags: Int = 394) = withContext(Dispatchers.IO) {
+        val url = "${Config.API}/REST/RapportInstellinggroep/$groupId".toHttpUrl()
+        val payload = """{"Flags":$flags}"""
+        val request = Request.Builder()
+            .url(url)
+            .header("Cookie", cookie)
+            .header("Content-Type", "application/json;charset=UTF-8")
+            .header("Accept", "application/json")
+            .put(payload.toRequestBody("application/json; charset=utf-8".toMediaType()))
+            .build()
+
+        client.newCall(request).execute().use { resp ->
+            if (resp.code == 401 || resp.code == 403) throw SessionExpiredException()
+            if (!resp.isSuccessful) throw IOException("Server returned ${resp.code}")
         }
     }
 

@@ -1,7 +1,8 @@
-@file:OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
+@file:OptIn(ExperimentalMaterial3ExpressiveApi::class)
 
 package dev.schoolgrades.ui
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -17,11 +18,15 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.Assignment
+import androidx.compose.material.icons.outlined.BarChart
+import androidx.compose.material.icons.outlined.Description
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ElevatedCard
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
 import androidx.compose.material3.LargeTopAppBar
 import androidx.compose.material3.LinearWavyProgressIndicator
 import androidx.compose.material3.MaterialShapes
@@ -46,14 +51,16 @@ import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import dev.schoolgrades.AgendaPoint
 import dev.schoolgrades.Subject
 import dev.schoolgrades.Test
 import dev.schoolgrades.UiState
 import dev.schoolgrades.calculateOverallAverage
+import dev.schoolgrades.calculateOverallMedian
 import dev.schoolgrades.formatNumber
 import java.io.File
 
-enum class GradesTab { Punten, Rapporten }
+enum class GradesTab { Punten, Todo, Rapporten }
 
 @Composable
 fun GradesScreen(
@@ -63,8 +70,10 @@ fun GradesScreen(
     onDownloadReport: suspend (Long) -> File,
 ) {
     var selectedTab by rememberSaveable { mutableStateOf(GradesTab.Punten) }
+    var showingInfo by rememberSaveable { mutableStateOf(false) }
     var viewingPdfId by rememberSaveable { mutableStateOf<Long?>(null) }
     var viewingPdfName by rememberSaveable { mutableStateOf("") }
+    BackHandler(enabled = showingInfo) { showingInfo = false }
     val openPdfId = viewingPdfId
     if (openPdfId != null) {
         PdfViewerScreen(
@@ -80,10 +89,23 @@ fun GradesScreen(
         modifier = Modifier.nestedScroll(scroll.nestedScrollConnection),
         topBar = {
             LargeTopAppBar(
+                navigationIcon = {
+                    if (!showingInfo) {
+                        TextButton(onClick = { showingInfo = true }) {
+                            Text("Over")
+                        }
+                    }
+                },
                 title = {
                     Column {
-                        Text(if (selectedTab == GradesTab.Punten) "Puntenboek" else "PDF Rapporten")
-                        if (state.studierichting.isNotBlank() && selectedTab == GradesTab.Punten) {
+                        Text(
+                            if (showingInfo) "Informatie" else when (selectedTab) {
+                                GradesTab.Punten -> "Puntenboek"
+                                GradesTab.Todo -> "Taken & toetsen"
+                                GradesTab.Rapporten -> "PDF Rapporten"
+                            }
+                        )
+                        if (!showingInfo && state.studierichting.isNotBlank() && selectedTab == GradesTab.Punten) {
                             Text(
                                 state.studierichting,
                                 style = MaterialTheme.typography.bodyMedium,
@@ -97,55 +119,70 @@ fun GradesScreen(
             )
         },
         bottomBar = {
+            if (!showingInfo) {
             NavigationBar {
                 NavigationBarItem(
                     selected = selectedTab == GradesTab.Punten,
                     onClick = { selectedTab = GradesTab.Punten },
-                    icon = { Text("📊", style = MaterialTheme.typography.titleMedium) },
+                    icon = { Icon(Icons.Outlined.BarChart, contentDescription = null) },
                     label = { Text("Punten") },
+                )
+                NavigationBarItem(
+                    selected = selectedTab == GradesTab.Todo,
+                    onClick = { selectedTab = GradesTab.Todo },
+                    icon = { Icon(Icons.AutoMirrored.Outlined.Assignment, contentDescription = null) },
+                    label = { Text("To-Do") },
                 )
                 NavigationBarItem(
                     selected = selectedTab == GradesTab.Rapporten,
                     onClick = { selectedTab = GradesTab.Rapporten },
-                    icon = { Text("📄", style = MaterialTheme.typography.titleMedium) },
+                    icon = { Icon(Icons.Outlined.Description, contentDescription = null) },
                     label = { Text("Rapporten") },
                 )
             }
+            }
         },
     ) { padding ->
-        PullToRefreshBox(
-            isRefreshing = state.refreshing,
-            onRefresh = onRefresh,
-            modifier = Modifier.fillMaxSize().padding(padding),
-        ) {
-            when (selectedTab) {
-                GradesTab.Punten -> {
-                    LazyColumn(
-                        modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp),
-                    ) {
-                        state.error?.let { msg -> item { ErrorCard(msg, onRefresh) } }
-                        val overallAvg = calculateOverallAverage(state.subjects)
-                        if (overallAvg != null) {
-                            item { OverallAverageCard(overallAvg) }
-                        }
-                        if (state.subjects.isEmpty() && !state.refreshing && state.error == null) {
-                            item {
-                                Text(
-                                    "Nog geen punten beschikbaar. Trek om te hernieuwen!",
-                                    style = MaterialTheme.typography.bodyLarge,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
+        if (showingInfo) {
+            InfoScreen(Modifier.fillMaxSize().padding(padding))
+        } else {
+            PullToRefreshBox(
+                isRefreshing = state.refreshing,
+                onRefresh = onRefresh,
+                modifier = Modifier.fillMaxSize().padding(padding),
+            ) {
+                when (selectedTab) {
+                    GradesTab.Punten -> {
+                        LazyColumn(
+                            modifier = Modifier.fillMaxSize(),
+                            contentPadding = PaddingValues(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp),
+                        ) {
+                            state.error?.let { msg -> item { ErrorCard(msg, onRefresh) } }
+                            val overallAvg = calculateOverallAverage(state.subjects)
+                            if (overallAvg != null) {
+                                item { OverallAverageCard(overallAvg, calculateOverallMedian(state.subjects)) }
                             }
+                            if (state.subjects.isEmpty() && !state.refreshing && state.error == null) {
+                                item {
+                                    Text(
+                                        "Nog geen punten beschikbaar. Trek om te hernieuwen!",
+                                        style = MaterialTheme.typography.bodyLarge,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
+                            }
+                            items(state.subjects, key = { it.name }) { SubjectCard(it) }
                         }
-                        items(state.subjects, key = { it.name }) { SubjectCard(it) }
                     }
-                }
-                GradesTab.Rapporten -> {
-                    ReportsScreen(state, onRefresh) { id, name ->
-                        viewingPdfId = id
-                        viewingPdfName = name
+                    GradesTab.Rapporten -> {
+                        ReportsScreen(state, onRefresh) { id, name ->
+                            viewingPdfId = id
+                            viewingPdfName = name
+                        }
+                    }
+                    GradesTab.Todo -> {
+                        TodoScreen(state, onRefresh)
                     }
                 }
             }
@@ -154,37 +191,128 @@ fun GradesScreen(
 }
 
 @Composable
-private fun OverallAverageCard(averageRatio: Double) {
-    val percentage = averageRatio * 100
+private fun InfoScreen(modifier: Modifier = Modifier) {
+    LazyColumn(
+        modifier = modifier,
+        contentPadding = PaddingValues(24.dp),
+        verticalArrangement = Arrangement.spacedBy(18.dp),
+    ) {
+        item {
+            Text("Schoolware++", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+        }
+        item {
+            Text(
+                "Een geoptimaliseerde versie van Schoolware (HHH) voor smartphones. Extra mediaan-functie toegevoegd!",
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        item { InfoSection("Privacy", "Het app verbindt zichzelf direct met Microsoft en de API van Schoolware. Uitloggen wist alles.") }
+        item { InfoSection("Licentie", "Dit applicatie wordt vrijgegeven onder the GNU GPL v3 licentie.")}
+    }
+}
+
+@Composable
+private fun InfoSection(title: String, description: String) {
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Text(title, style = MaterialTheme.typography.titleMedium)
+        Text(description, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}
+
+@Composable
+private fun TodoScreen(state: UiState, onRefresh: () -> Unit) {
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(16.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        state.todoError?.let { message -> item { ErrorCard(message, onRefresh) } }
+        if (state.todoItems.isEmpty() && !state.refreshing && state.todoError == null) {
+            item {
+                Text(
+                    "Geen aankomende taken of toetsen.",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+        items(state.todoItems, key = { it.id }) { point -> TodoCard(point) }
+    }
+}
+
+@Composable
+private fun TodoCard(point: AgendaPoint) {
+    val typeLabel = if (point.type == 1001) "Taak" else "Toets"
+    val dateLabel = point.startsAt.take(16).replace('T', ' ')
+    val comment = androidx.core.text.HtmlCompat.fromHtml(
+        point.comment,
+        androidx.core.text.HtmlCompat.FROM_HTML_MODE_COMPACT,
+    ).toString().trim()
+
+    ElevatedCard(modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(typeLabel, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+                Spacer(Modifier.weight(1f))
+                Text(dateLabel, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            Text(point.title, style = MaterialTheme.typography.titleMedium)
+            if (point.subject.isNotBlank()) {
+                Text(point.subject, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            if (comment.isNotBlank()) {
+                Text(comment, style = MaterialTheme.typography.bodySmall, maxLines = 4)
+            }
+        }
+    }
+}
+
+@Composable
+private fun OverallAverageCard(averageRatio: Double, medianRatio: Double?) {
     ElevatedCard(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.elevatedCardColors(
             containerColor = MaterialTheme.colorScheme.primaryContainer,
         ),
     ) {
-        Row(
-            modifier = Modifier.padding(16.dp).fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween,
-        ) {
-            Column {
-                Text(
-                    "Algemeen Gemiddelde",
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer,
-                )
-                Text(
-                    "Gewogen gemiddelde van alle vakken",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f),
-                )
-            }
+        Column(Modifier.padding(16.dp).fillMaxWidth()) {
             Text(
-                "${formatNumber(percentage)}%",
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold,
+                "Algemeen Percentage",
+                style = MaterialTheme.typography.titleMedium,
                 color = MaterialTheme.colorScheme.onPrimaryContainer,
             )
+            Text(
+                "Gewogen studentgemiddelde en klasmediaan",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f),
+            )
+            Spacer(Modifier.size(12.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(16.dp),
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text("Jij", style = MaterialTheme.typography.bodySmall)
+                    Text(
+                        "${formatNumber(averageRatio * 100)}%",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                    )
+                }
+                medianRatio?.let { median ->
+                    Column(Modifier.weight(1f)) {
+                        Text("Mediaan", style = MaterialTheme.typography.bodySmall)
+                        Text(
+                            "${formatNumber(median * 100)}%",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer,
+                        )
+                    }
+                }
+            }
         }
     }
 }
@@ -251,8 +379,20 @@ private fun SubjectCard(subject: Subject) {
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
-                subject.weightedAveragePercentageLabel?.let { label ->
-                    Text(label, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                val averageLabel = subject.weightedAveragePercentageLabel
+                val medianLabel = subject.medianAveragePercentageLabel
+                if (averageLabel != null || medianLabel != null) {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        averageLabel?.let { label ->
+                            Text(label, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                        }
+                        medianLabel?.let { label ->
+                            Text("M $label", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
                 }
             }
             if (expanded) {
@@ -289,6 +429,19 @@ private fun TestRow(test: Test) {
                 progress = { ratio },
                 modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
                 color = if (ratio < 0.5f) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
+            )
+        }
+        test.median?.let { median ->
+            val medianLabel = if (test.max > 0) {
+                "${formatNumber(median * test.max)} / ${formatNumber(test.max)} (${formatNumber(median * 100)}%)"
+            } else {
+                "${formatNumber(median * 100)}%"
+            }
+            Text(
+                "Mediaan: $medianLabel",
+                modifier = Modifier.padding(top = 6.dp),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
         if (test.comment.isNotBlank()) {

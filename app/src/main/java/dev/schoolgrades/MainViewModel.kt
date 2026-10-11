@@ -18,6 +18,8 @@ enum class Phase { Starting, SignIn, Verifying, Grades }
 data class UiState(
     val phase: Phase = Phase.Starting,
     val subjects: List<Subject> = emptyList(),
+    val todoItems: List<AgendaPoint> = emptyList(),
+    val todoError: String? = null,
     val reportPdfs: List<ReportPdfRow> = emptyList(),
     val refreshing: Boolean = false,
     val error: String? = null,
@@ -118,7 +120,25 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         try {
             val student = api.student(cookie)
             val year = api.currentSchoolYear(cookie)
+            try {
+                api.updateRapportInstellinggroepFlags(cookie, "18")
+            } catch (e: SessionExpiredException) {
+                throw e
+            } catch (e: java.io.IOException) {
+                // Keep grade loading available when the server rejects the flag update.
+            }
             val records = api.grades(cookie, student.id, year.from)
+            var todoError: String? = null
+            val todoItems = try {
+                api.upcomingAgendaPoints(cookie, year.to)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: SessionExpiredException) {
+                throw e
+            } catch (e: Exception) {
+                todoError = e.message ?: "Couldn't load tasks and tests."
+                emptyList()
+            }
             val metaMap = api.subjectMetadata(cookie, student.id)
             val richting = api.studierichting(cookie, student.id)
             val pdfs = api.reportPdfs(cookie, student.id)
@@ -126,6 +146,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 it.copy(
                     phase = Phase.Grades,
                     subjects = records.toSubjects(metaMap),
+                    todoItems = todoItems,
+                    todoError = todoError,
                     reportPdfs = pdfs,
                     studierichting = richting,
                     refreshing = false,

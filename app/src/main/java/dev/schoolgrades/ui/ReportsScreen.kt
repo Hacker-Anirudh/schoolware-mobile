@@ -11,7 +11,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Visibility
 import androidx.compose.material3.ElevatedCard
+import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -71,7 +74,7 @@ private fun ReportPdfCard(pdf: ReportPdfRow, displayName: String, onClick: () ->
             }
             Spacer(Modifier.width(12.dp))
             IconButton(onClick = onClick) {
-                Text("👁️", style = MaterialTheme.typography.titleMedium)
+                Icon(Icons.Outlined.Visibility, contentDescription = "Rapport bekijken")
             }
         }
     }
