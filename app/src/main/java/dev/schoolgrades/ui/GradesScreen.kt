@@ -223,6 +223,13 @@ private fun InfoScreen(modifier: Modifier = Modifier) {
                 textDecoration = TextDecoration.Underline,
             )
         }
+        item {
+            Text(
+                "(c) Anirudh Menon 2026. Alle rechten voorbehouden.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
     }
 }
 

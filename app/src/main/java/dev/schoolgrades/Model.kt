@@ -208,12 +208,14 @@ data class Subject(
     val pending: Int get() = tests.count { it.score == null && !it.absent }
 
     val weightedAverage: Double?
-        get() = calculateAssessmentAverage(tests, excludeAbsent = true) { test ->
+        get() = calculateAssessmentAverage(tests, excludeAbsentOrPending = true) { test ->
             if (test.max > 0) test.score?.div(test.max) else null
         }
 
     val medianAverage: Double?
-        get() = calculateAssessmentAverage(tests, excludeAbsent = false) { it.median }
+        get() = calculateAssessmentAverage(tests, excludeAbsentOrPending = true) { test ->
+            if (test.score != null && !test.absent) test.median else null
+        }
 
     val weightedAverageLabel: String?
         get() {
@@ -239,12 +241,16 @@ data class Subject(
 
 private fun calculateAssessmentAverage(
     tests: List<Test>,
-    excludeAbsent: Boolean,
+    excludeAbsentOrPending: Boolean,
     ratioFor: (Test) -> Double?,
 ): Double? {
     val weightedTests = tests.mapNotNull { test ->
-        ratioFor(test)?.let { ratio -> test to ratio }
-    }.filter { (test, _) -> test.max > 0 && (!excludeAbsent || !test.absent) }
+        if (excludeAbsentOrPending && (test.absent || test.score == null)) {
+            null
+        } else {
+            ratioFor(test)?.let { ratio -> test to ratio }
+        }
+    }.filter { (test, _) -> test.max > 0 }
     if (weightedTests.isEmpty()) return null
 
     val categoryAverages = weightedTests.groupBy { it.first.categoryId }.mapNotNull { (_, categoryTests) ->

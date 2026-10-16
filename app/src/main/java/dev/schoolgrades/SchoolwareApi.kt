@@ -1,6 +1,7 @@
 package dev.schoolgrades
 
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.json.Json
@@ -118,19 +119,41 @@ class SchoolwareApi {
         points.distinctBy { it.id }.sortedBy { it.startsAt }
     }
 
-    suspend fun subjectMetadata(cookie: String, studentId: Long): Map<String, SubjectMeta> = withContext(Dispatchers.IO) {
-        val map = mutableMapOf<String, SubjectMeta>()
+    suspend fun loopbaanRow(cookie: String, studentId: Long): LoopbaanRow? = withContext(Dispatchers.IO) {
         try {
-            val loopbaanUrl = "${Config.API}/Provider/LoopbaanGegevens/Read/?LL_ID=$studentId&_dc=${System.currentTimeMillis()}".toHttpUrl()
-            val req1 = Request.Builder()
-                .url(loopbaanUrl)
+            val url = "${Config.API}/Provider/LoopbaanGegevens/Read/".toHttpUrl().newBuilder()
+                .addQueryParameter("LL_ID", studentId.toString())
+                .addQueryParameter("_dc", System.currentTimeMillis().toString())
+                .build()
+            val request = Request.Builder()
+                .url(url)
                 .header("Cookie", cookie)
                 .header("Accept", "application/json")
                 .build()
-            val body1 = client.newCall(req1).execute().use { it.body?.string().orEmpty() }
-            if (!body1.startsWith("{")) return@withContext emptyMap()
-            val loopbaan = json.decodeFromString(LoopbaanData.serializer(), body1)
-            val klasId = loopbaan.rows.firstOrNull()?.klasId ?: return@withContext emptyMap()
+            client.newCall(request).execute().use { response ->
+                if (response.code == 401 || response.code == 403) throw SessionExpiredException()
+                val body = response.body?.string().orEmpty()
+                if (!response.isSuccessful) throw IOException("Server returned ${response.code}")
+                if (!body.trimStart().startsWith("{")) throw SessionExpiredException()
+                json.decodeFromString(LoopbaanData.serializer(), body).rows.firstOrNull()
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: SessionExpiredException) {
+            throw e
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    suspend fun subjectMetadata(
+        cookie: String,
+        studentId: Long,
+        loopbaan: LoopbaanRow?,
+    ): Map<String, SubjectMeta> = withContext(Dispatchers.IO) {
+        val map = mutableMapOf<String, SubjectMeta>()
+        try {
+            val klasId = loopbaan?.klasId?.takeIf { it > 0 } ?: return@withContext emptyMap()
 
             val rapportUrl = "${Config.API}/REST/RapportAfdrukVolledig?Klas=$klasId&Leerling=$studentId&_dc=${System.currentTimeMillis()}".toHttpUrl()
             val req2 = Request.Builder()
@@ -178,33 +201,20 @@ class SchoolwareApi {
                     }
                 }
             }
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             // Silently fall back if network/session issue occurs
         }
         map
     }
 
-    suspend fun studierichting(cookie: String, studentId: Long): String = withContext(Dispatchers.IO) {
-        try {
-            val loopbaanUrl = "${Config.API}/Provider/LoopbaanGegevens/Read/?LL_ID=$studentId&_dc=${System.currentTimeMillis()}".toHttpUrl()
-            val req = Request.Builder()
-                .url(loopbaanUrl)
-                .header("Cookie", cookie)
-                .header("Accept", "application/json")
-                .build()
-            val body = client.newCall(req).execute().use { it.body?.string().orEmpty() }
-            if (!body.startsWith("{")) return@withContext ""
-            val loopbaan = json.decodeFromString(LoopbaanData.serializer(), body)
-            val row = loopbaan.rows.firstOrNull() ?: return@withContext ""
-            val code = row.klasCode.trim()
-            val desc = row.klasOmschrijving.trim()
-            listOfNotNull(
-                code.ifBlank { null },
-                desc.ifBlank { null },
-            ).joinToString(" · ")
-        } catch (e: Exception) {
-            ""
-        }
+    fun studierichting(loopbaan: LoopbaanRow?): String {
+        val row = loopbaan ?: return ""
+        return listOfNotNull(
+            row.klasCode.trim().ifBlank { null },
+            row.klasOmschrijving.trim().ifBlank { null },
+        ).joinToString(" · ")
     }
 
     suspend fun reportPdfs(cookie: String, studentId: Long): List<ReportPdfRow> = withContext(Dispatchers.IO) {

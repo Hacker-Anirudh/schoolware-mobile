@@ -5,6 +5,8 @@ import android.webkit.CookieManager
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -54,10 +56,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             for (attempt in 1..20) {
                 val cookie = CookieManager.getInstance().getCookie(Config.SITE).orEmpty()
                 try {
-                    api.student(cookie)
+                    val student = api.student(cookie)
                     store.saveCookie(cookie)
                     CookieManager.getInstance().flush()
-                    load(cookie)
+                    load(cookie, student)
                     ok = true
                     break
                 } catch (e: CancellationException) {
@@ -115,36 +117,50 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         )
     }
 
-    private suspend fun load(cookie: String) {
+    private suspend fun load(cookie: String, verifiedStudent: Student? = null) {
         _state.update { it.copy(refreshing = true, error = null) }
         try {
-            val student = api.student(cookie)
-            val year = api.currentSchoolYear(cookie)
-            val records = api.grades(cookie, student.id, year.from)
-            var todoError: String? = null
-            val todoItems = try {
-                api.upcomingAgendaPoints(cookie, year.to)
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: SessionExpiredException) {
-                throw e
-            } catch (e: Exception) {
-                todoError = e.message ?: "Couldn't load tasks and tests."
-                emptyList()
-            }
-            val metaMap = api.subjectMetadata(cookie, student.id)
-            val richting = api.studierichting(cookie, student.id)
-            val pdfs = api.reportPdfs(cookie, student.id)
-            _state.update {
-                it.copy(
-                    phase = Phase.Grades,
-                    subjects = records.toSubjects(metaMap),
-                    todoItems = todoItems,
-                    todoError = todoError,
-                    reportPdfs = pdfs,
-                    studierichting = richting,
-                    refreshing = false,
-                )
+            coroutineScope {
+                val studentDeferred = async { verifiedStudent ?: api.student(cookie) }
+                val yearDeferred = async { api.currentSchoolYear(cookie) }
+                val student = studentDeferred.await()
+                val year = yearDeferred.await()
+
+                val loopbaanDeferred = async { api.loopbaanRow(cookie, student.id) }
+                val gradesDeferred = async { api.grades(cookie, student.id, year.from) }
+                val todoDeferred = async {
+                    try {
+                        api.upcomingAgendaPoints(cookie, year.to) to null
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: SessionExpiredException) {
+                        throw e
+                    } catch (e: Exception) {
+                        emptyList<AgendaPoint>() to (e.message ?: "Couldn't load tasks and tests.")
+                    }
+                }
+                val metadataDeferred = async {
+                    api.subjectMetadata(cookie, student.id, loopbaanDeferred.await())
+                }
+                val pdfsDeferred = async { api.reportPdfs(cookie, student.id) }
+
+                val loopbaan = loopbaanDeferred.await()
+                val records = gradesDeferred.await()
+                val (todoItems, todoError) = todoDeferred.await()
+                val metaMap = metadataDeferred.await()
+                val pdfs = pdfsDeferred.await()
+
+                _state.update {
+                    it.copy(
+                        phase = Phase.Grades,
+                        subjects = records.toSubjects(metaMap),
+                        todoItems = todoItems,
+                        todoError = todoError,
+                        reportPdfs = pdfs,
+                        studierichting = api.studierichting(loopbaan),
+                        refreshing = false,
+                    )
+                }
             }
         } catch (e: CancellationException) {
             throw e

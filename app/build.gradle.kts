@@ -12,11 +12,15 @@ android {
         applicationId = "com.sudothelinuxwizard.schoolwareplusplus"
         minSdk = 24            // Jetpack Compose's own floor, so this is as low as it can go
         targetSdk = 37
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = 3
+        versionName = "1.2"
     }
     buildTypes {
-        release { isMinifyEnabled = false }
+        release {
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"))
+        }
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
@@ -31,8 +35,6 @@ android {
 }
 
 dependencies {
-    implementation("com.squareup.retrofit2:retrofit:2.11.0")
-    implementation("com.squareup.retrofit2:converter-gson:2.11.0")
     implementation(platform("androidx.compose:compose-bom:2025.09.00"))
     implementation("androidx.compose.material3:material3:1.5.0-alpha27")
     implementation("androidx.compose.material:material-icons-extended")
