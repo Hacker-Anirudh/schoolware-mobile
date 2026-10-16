@@ -55,7 +55,7 @@ class SchoolwareApi {
             SchoolYear.serializer(),
         )
         val now = stamp()
-        return years.firstOrNull { y -> y.from <= now && now < y.holidayEnd.ifBlank { y.to } }
+        return years.firstOrNull { y -> (y.from <= now) && (now < y.holidayEnd.ifBlank { y.to }) }
             ?: years.maxByOrNull { it.from }
             ?: throw IOException("No school year found")
     }
@@ -131,7 +131,7 @@ class SchoolwareApi {
                 .header("Accept", "application/json")
                 .build()
             client.newCall(request).execute().use { response ->
-                if (response.code == 401 || response.code == 403) throw SessionExpiredException()
+                if ((response.code == 401) || (response.code == 403)) throw SessionExpiredException()
                 val body = response.body?.string().orEmpty()
                 if (!response.isSuccessful) throw IOException("Server returned ${response.code}")
                 if (!body.trimStart().startsWith("{")) throw SessionExpiredException()
@@ -141,7 +141,7 @@ class SchoolwareApi {
             throw e
         } catch (e: SessionExpiredException) {
             throw e
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             null
         }
     }
@@ -203,7 +203,7 @@ class SchoolwareApi {
             }
         } catch (e: CancellationException) {
             throw e
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             // Silently fall back if network/session issue occurs
         }
         map

@@ -12,8 +12,8 @@ android {
         applicationId = "com.sudothelinuxwizard.schoolwareplusplus"
         minSdk = 24            // Jetpack Compose's own floor, so this is as low as it can go
         targetSdk = 37
-        versionCode = 3
-        versionName = "1.2"
+        versionCode = 4
+        versionName = "1.3"
     }
     buildTypes {
         release {
@@ -41,6 +41,8 @@ dependencies {
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.foundation:foundation")
 
+    implementation("androidx.biometric:biometric-ktx:1.2.0-alpha05")
+    implementation("androidx.fragment:fragment-ktx:1.8.6")
     implementation("androidx.core:core-ktx:1.16.0")
     implementation("androidx.activity:activity-compose:1.10.1")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.9.0")

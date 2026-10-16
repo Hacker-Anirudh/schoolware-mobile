@@ -34,6 +34,14 @@ class SecureStore(context: Context) {
         prefs.edit().clear().apply()
     }
 
+    fun setBiometricEnabled(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_BIOMETRIC, enabled).apply()
+    }
+
+    fun isBiometricEnabled(): Boolean {
+        return prefs.getBoolean(KEY_BIOMETRIC, false)
+    }
+
     @RequiresApi(23)
     private fun secretKey(): SecretKey {
         val ks = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
@@ -62,12 +70,13 @@ class SecureStore(context: Context) {
         val cipher = Cipher.getInstance("AES/GCM/NoPadding")
         cipher.init(Cipher.DECRYPT_MODE, secretKey(), GCMParameterSpec(128, raw.copyOfRange(0, 12)))
         String(cipher.doFinal(raw, 12, raw.size - 12), Charsets.UTF_8)
-    } catch (e: Exception) {
+    } catch (_: Exception) {
         null
     }
 
     private companion object {
         const val KEY = "cookie"
+        const val KEY_BIOMETRIC = "biometric_enabled"
         const val ALIAS = "schoolgrades_session"
     }
 }

@@ -163,15 +163,12 @@ private fun PdfPage(renderer: PdfRenderer, mutex: Mutex, index: Int, targetWidth
     val bitmap by produceState<Bitmap?>(null, renderer, index, targetWidth) {
         value = withContext(Dispatchers.IO) {
             mutex.withLock {
-                val page = renderer.openPage(index)
-                try {
-                    val height = (targetWidth * page.height.toFloat() / page.width).toInt().coerceAtLeast(1)
+                renderer.openPage(index).use { page ->
+                    val height = ((targetWidth * page.height.toFloat()) / page.width).toInt().coerceAtLeast(1)
                     val bmp = Bitmap.createBitmap(targetWidth, height, Bitmap.Config.ARGB_8888)
                     bmp.eraseColor(android.graphics.Color.WHITE)
                     page.render(bmp, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
                     bmp
-                } finally {
-                    page.close()
                 }
             }
         }

@@ -27,6 +27,7 @@ data class UiState(
     val error: String? = null,
     val loginAttempt: Int = 0,
     val studierichting: String = "",
+    val biometricEnabled: Boolean = false,
 )
 
 class MainViewModel(app: Application) : AndroidViewModel(app) {
@@ -38,11 +39,18 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     init {
         val cookie = store.loadCookie()
+        val bio = store.isBiometricEnabled()
         if (cookie == null) {
-            _state.value = UiState(phase = Phase.SignIn)
+            _state.value = UiState(phase = Phase.SignIn, biometricEnabled = bio)
         } else {
+            _state.value = UiState(biometricEnabled = bio)
             viewModelScope.launch { load(cookie) }
         }
+    }
+
+    fun setBiometricEnabled(enabled: Boolean) {
+        store.setBiometricEnabled(enabled)
+        _state.update { it.copy(biometricEnabled = enabled) }
     }
 
     /** Called by the WebView once Schoolware's start page has loaded after Microsoft sign-in. */
@@ -64,7 +72,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     break
                 } catch (e: CancellationException) {
                     throw e
-                } catch (e: Exception) {
+                } catch (_: Exception) {
                     delay(750)
                 }
             }
@@ -90,7 +98,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     suspend fun downloadReport(docId: Long): File {
         val dir = reportsDir().apply { mkdirs() }
         val file = File(dir, "$docId.pdf")
-        if (file.exists() && file.length() > 0) return file
+        if (file.exists() && (file.length() > 0)) return file
         val cookie = store.loadCookie() ?: run {
             signOut("Your session expired. Please sign in again.")
             throw SessionExpiredException()

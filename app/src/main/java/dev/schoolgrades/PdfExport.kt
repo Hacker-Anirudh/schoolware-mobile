@@ -19,8 +19,11 @@ object PdfExport {
 
     /** Android 10+ only (no storage permission needed). Returns false if unsupported or it failed. */
     fun saveToDownloads(context: Context, file: File, displayName: String): Boolean {
-        if (Build.VERSION.SDK_INT < 29) return false
-        return saveWithMediaStore(context, file, displayName)
+        return if (Build.VERSION.SDK_INT >= 29) {
+            saveWithMediaStore(context, file, displayName)
+        } else {
+            false
+        }
     }
 
     @RequiresApi(29)
@@ -39,7 +42,7 @@ object PdfExport {
             values.put(MediaStore.Downloads.IS_PENDING, 0)
             resolver.update(uri, values, null, null)
             true
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             resolver.delete(uri, null, null)
             false
         }
@@ -48,7 +51,7 @@ object PdfExport {
     fun share(context: Context, file: File, displayName: String) {
         // Copy to a nicely named file so the receiving app shows a readable name.
         val named = File(file.parentFile, safeName(displayName))
-        if (!named.exists() || named.length() != file.length()) file.copyTo(named, overwrite = true)
+        if (!named.exists() || (named.length() != file.length())) file.copyTo(named, overwrite = true)
         val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", named)
         val send = Intent(Intent.ACTION_SEND).apply {
             type = "application/pdf"

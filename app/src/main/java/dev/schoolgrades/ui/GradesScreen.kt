@@ -23,11 +23,14 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.Assignment
 import androidx.compose.material.icons.outlined.BarChart
 import androidx.compose.material.icons.outlined.Description
+import androidx.compose.material.icons.outlined.Lock
+import androidx.compose.material.icons.outlined.LockOpen
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.LargeTopAppBar
 import androidx.compose.material3.LinearWavyProgressIndicator
 import androidx.compose.material3.MaterialShapes
@@ -70,6 +73,7 @@ fun GradesScreen(
     state: UiState,
     onRefresh: () -> Unit,
     onSignOut: () -> Unit,
+    onToggleBiometric: (Boolean) -> Unit,
     onDownloadReport: suspend (Long) -> File,
 ) {
     var selectedTab by rememberSaveable { mutableStateOf(GradesTab.Punten) }
@@ -108,7 +112,7 @@ fun GradesScreen(
                                 GradesTab.Rapporten -> "PDF Rapporten"
                             }
                         )
-                        if (!showingInfo && state.studierichting.isNotBlank() && selectedTab == GradesTab.Punten) {
+                        if (!showingInfo && state.studierichting.isNotBlank() && (selectedTab == GradesTab.Punten)) {
                             Text(
                                 state.studierichting,
                                 style = MaterialTheme.typography.bodyMedium,
@@ -117,7 +121,16 @@ fun GradesScreen(
                         }
                     }
                 },
-                actions = { TextButton(onClick = onSignOut) { Text("Uitloggen") } },
+                actions = {
+                    IconButton(onClick = { onToggleBiometric(!state.biometricEnabled) }) {
+                        Icon(
+                            imageVector = if (state.biometricEnabled) Icons.Outlined.Lock else Icons.Outlined.LockOpen,
+                            contentDescription = if (state.biometricEnabled) "Biometrie uitschakelen" else "Biometrie inschakelen",
+                            tint = if (state.biometricEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    TextButton(onClick = onSignOut) { Text("Uitloggen") }
+                },
                 scrollBehavior = scroll,
             )
         },

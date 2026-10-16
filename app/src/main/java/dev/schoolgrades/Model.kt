@@ -173,7 +173,7 @@ data class Test(
     val teacher: String = "",
 ) {
     val effectiveWeight: Double
-        get() = if (weight != null && weight > 0) weight else if (max > 0) max else 1.0
+        get() = if ((weight != null) && (weight > 0)) weight else if (max > 0) max else 1.0
 
     val label: String
         get() = when {
@@ -205,24 +205,16 @@ data class Subject(
         }
 
     val graded: Int get() = tests.count { it.score != null }
-    val pending: Int get() = tests.count { it.score == null && !it.absent }
+    val pending: Int get() = tests.count { (it.score == null) && (!it.absent) }
 
     val weightedAverage: Double?
-        get() = calculateAssessmentAverage(tests, excludeAbsentOrPending = true) { test ->
+        get() = calculateAssessmentAverage(tests) { test ->
             if (test.max > 0) test.score?.div(test.max) else null
         }
 
     val medianAverage: Double?
-        get() = calculateAssessmentAverage(tests, excludeAbsentOrPending = true) { test ->
+        get() = calculateAssessmentAverage(tests) { test ->
             if (test.score != null && !test.absent) test.median else null
-        }
-
-    val weightedAverageLabel: String?
-        get() {
-            val avgRatio = weightedAverage ?: return null
-            val percentage = avgRatio * 100
-            val scoreOn20 = avgRatio * 20
-            return "${formatNumber(scoreOn20)} / 20 (${formatNumber(percentage)}%)"
         }
 
     val weightedAveragePercentageLabel: String?
@@ -241,11 +233,10 @@ data class Subject(
 
 private fun calculateAssessmentAverage(
     tests: List<Test>,
-    excludeAbsentOrPending: Boolean,
     ratioFor: (Test) -> Double?,
 ): Double? {
     val weightedTests = tests.mapNotNull { test ->
-        if (excludeAbsentOrPending && (test.absent || test.score == null)) {
+        if (test.absent || test.score == null) {
             null
         } else {
             ratioFor(test)?.let { ratio -> test to ratio }
