@@ -18,7 +18,7 @@ import java.util.Date
 import java.util.Locale
 import java.util.concurrent.TimeUnit
 
-class SessionExpiredException : IOException("Your session has expired. Please sign in again.")
+class SessionExpiredException : IOException("Je sessie is verlopen. Log opnieuw in.")
 
 /** Client for the parts of Schoolware's REST layer the student grade screen uses. */
 class SchoolwareApi {
@@ -40,7 +40,7 @@ class SchoolwareApi {
     /** With a valid session this returns the logged-in student; no user id needed. */
     suspend fun student(cookie: String): Student =
         get(cookie, "Leerling/", mapOf("limit" to "0", "page" to "1", "start" to "0"), Student.serializer())
-            .firstOrNull() ?: throw IOException("No student record returned")
+            .firstOrNull() ?: throw IOException("Geen leerlinggegevens ontvangen")
 
     suspend fun currentSchoolYear(cookie: String): SchoolYear {
         val day = SimpleDateFormat("yyyy-MM-dd", Locale.US)
@@ -57,7 +57,7 @@ class SchoolwareApi {
         val now = stamp()
         return years.firstOrNull { y -> (y.from <= now) && (now < y.holidayEnd.ifBlank { y.to }) }
             ?: years.maxByOrNull { it.from }
-            ?: throw IOException("No school year found")
+            ?: throw IOException("Geen schooljaar gevonden")
     }
 
     suspend fun grades(cookie: String, studentId: Long, yearStart: String): List<GradeRecord> =

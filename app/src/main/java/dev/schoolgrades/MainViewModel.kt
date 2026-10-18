@@ -78,7 +78,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             }
             verifying = false
             if (!ok) {
-                _state.update { it.copy(phase = Phase.SignIn, error = "Couldn't finish signing in. Please try again.") }
+                _state.update { it.copy(phase = Phase.SignIn, error = "Kon aanmelden niet voltooien. Probeer het opnieuw.") }
             }
         }
     }
@@ -100,13 +100,13 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val file = File(dir, "$docId.pdf")
         if (file.exists() && (file.length() > 0)) return file
         val cookie = store.loadCookie() ?: run {
-            signOut("Your session expired. Please sign in again.")
+            signOut("Je sessie is verlopen. Log opnieuw in.")
             throw SessionExpiredException()
         }
         try {
             api.downloadDocument(cookie, docId, file)
         } catch (e: SessionExpiredException) {
-            signOut("Your session expired. Please sign in again.")
+            signOut("Je sessie is verlopen. Log opnieuw in.")
             throw e
         }
         return file
@@ -144,7 +144,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     } catch (e: SessionExpiredException) {
                         throw e
                     } catch (e: Exception) {
-                        emptyList<AgendaPoint>() to (e.message ?: "Couldn't load tasks and tests.")
+                        emptyList<AgendaPoint>() to (e.message ?: "Kon taken en toetsen niet laden.")
                     }
                 }
                 val metadataDeferred = async {
@@ -173,13 +173,13 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         } catch (e: CancellationException) {
             throw e
         } catch (e: SessionExpiredException) {
-            signOut("Your session expired. Please sign in again.")
+            signOut("Je sessie is verlopen. Log opnieuw in.")
         } catch (e: Exception) {
             _state.update {
                 it.copy(
                     phase = Phase.Grades,
                     refreshing = false,
-                    error = e.message ?: "Something went wrong. Pull down to retry.",
+                    error = e.message ?: "Er is iets misgegaan. Veeg omlaag om opnieuw te proberen.",
                 )
             }
         }

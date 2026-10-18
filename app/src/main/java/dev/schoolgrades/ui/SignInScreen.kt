@@ -78,7 +78,7 @@ fun SignInScreen(
             ) {
                 Column(Modifier.padding(16.dp)) {
                     Text(error, color = MaterialTheme.colorScheme.onErrorContainer)
-                    TextButton(onClick = onRetry) { Text("Try again") }
+                    TextButton(onClick = onRetry) { Text("Opnieuw proberen") }
                 }
             }
         }
@@ -110,7 +110,7 @@ fun SignInScreen(
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp)) {
                     LoadingIndicator()
-                    Text("Finishing sign-in…", style = MaterialTheme.typography.titleMedium)
+                    Text("Aanmelden voltooien…", style = MaterialTheme.typography.titleMedium)
                 }
             }
         }

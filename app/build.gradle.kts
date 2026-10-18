@@ -12,8 +12,8 @@ android {
         applicationId = "com.sudothelinuxwizard.schoolwareplusplus"
         minSdk = 24            // Jetpack Compose's own floor, so this is as low as it can go
         targetSdk = 37
-        versionCode = 4
-        versionName = "1.3"
+        versionCode = 5
+        versionName = "1.4"
     }
     buildTypes {
         release {

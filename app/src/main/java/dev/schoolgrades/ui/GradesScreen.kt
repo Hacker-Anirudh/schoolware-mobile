@@ -359,7 +359,7 @@ private fun ErrorCard(message: String, onRetry: () -> Unit) {
     ) {
         Column(Modifier.padding(16.dp)) {
             Text(message, color = MaterialTheme.colorScheme.onErrorContainer)
-            TextButton(onClick = onRetry) { Text("Retry") }
+            TextButton(onClick = onRetry) { Text("Opnieuw proberen") }
         }
     }
 }
